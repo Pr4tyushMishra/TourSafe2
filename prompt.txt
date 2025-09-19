@@ -1,0 +1,335 @@
+Prompt for building a functional prototype of TourPal (developer / AI code generator)
+
+Short summary (one line):
+Build a software-only, hackathon-ready prototype of TourPal — a modern, attractive tourist-safety app + authority dashboard demonstrating: time-bound digital IDs (hash-anchored), panic/geo-fence alerts, simulated community mesh relay (offline fallback), Guardian Mode, Safety Index, and a web dashboard. Keep implementations simple, modular, and testable. Emphasize code reliability, reusability, abstraction, and clear separation of concerns so future changes won’t break the product.
+
+Goals & Non-goals
+
+Goals (MVP must demonstrate):
+
+Tourist app (React Native / Expo + TypeScript): register/mock KYC → generate time-limited digital ID (QR), display Safety Index, Panic button, Geo-fence detection, Silent SOS (volume button), Guardian Mode opt-in, “simulate offline” toggle to test mesh relay.
+
+Backend (NestJS or Node+Express + TypeScript): REST API for users/IDs/alerts/guardians/geozones; modular services; JWT auth; simulated blockchain hash anchoring service; push notifications via Firebase Cloud Messaging (FCM).
+
+Web dashboard (React + TypeScript + Tailwind/MUI): real-time map (Mapbox/Leaflet) with alerts and heatmap, view digital ID & alert history, simple e-FIR draft action button.
+
+Mesh relay simulation: software-only fallback that relays alerts to dashboard via another device (WebRTC/WebSocket relay or a “relay mode” that uses the backend as a proxy when a device reports “relay”).
+
+Demo-ready scripted scenario that shows all flows (ID creation → geofence alert → panic → offline relay → guardian notified → dashboard receives alert).
+
+Non-goals (do not implement for prototype):
+
+Real blockchain integration (use an abstracted service that writes SHA-256 hashes to DB to simulate immutability).
+
+Hardware/IoT.
+
+Full production-grade security/regulatory integrations (but follow secure-by-default patterns).
+
+High-level architecture (recommended)
+
+Mobile client: Expo + React Native + TypeScript
+
+Web dashboard: React (Vite) + TypeScript + TailwindCSS (or MUI)
+
+Backend: NestJS (TypeScript) for dependency injection, modularity, and clean architecture
+
+Database: Postgres (or Firestore for speed) with seed data. Use TypeORM/Prisma.
+
+Messaging: WebSockets (socket.io) for realtime dashboard updates; use FCM for push.
+
+Dev infra: Docker Compose (backend + DB + frontend) for local demo.
+
+Tests: Jest unit tests; basic integration tests.
+
+CI (optional): GitHub Actions workflow skeleton for build/test.
+
+Key design principles & code-quality requirements
+
+SOLID & modularity: use repository/service/controller layers. Keep controllers thin. Business logic in services. Persistence via repository pattern.
+
+Abstraction: define interfaces/abstract classes (e.g., IBlockchainService, IAlertRelay) and provide a simple in-memory/mock implementation for the hackathon. This allows swapping in a real blockchain or mesh implementation later.
+
+Dependency Injection: use NestJS DI or tsyringe to avoid tight coupling.
+
+Reusability: shared UI components, utility functions, and common DTOs across frontend modules.
+
+Robust error handling: central error middleware and typed error classes. Keep logs.
+
+Feature flags & simulation toggles: e.g., SIMULATE_MESH=true to enable mesh simulation flows.
+
+Idempotency: Alert creation should be idempotent (use request IDs).
+
+Typing: TypeScript everywhere with strict types/DTOs. Use interfaces for domain models.
+
+Documentation: README with run steps, sample data, API spec (OpenAPI or Postman collection), and demo script.
+
+Acceptance criteria (prototype must satisfy)
+
+Tourist can register (mock KYC) and generate a QR-based digital ID; backend returns a SHA-256 hash anchored record.
+
+Tourist sees Safety Index on map; entering a hard-coded danger polygon triggers a local geo-fence alert.
+
+Panic button sends an Alert to backend; dashboard receives it in real-time and shows last-known location + ID details.
+
+Silent SOS (volume press or double-shake) triggers alert without opening the UI.
+
+Guardian Mode: assign a guardian (hotel/shop) to a tourist; when panic is triggered the guardian receives push/WS notification.
+
+Mesh relay simulation: with tourist app in “simulate offline” mode, alert is relayed via another device or “relay switch” and still reaches dashboard.
+
+Demo flow completes in ≤ 5 minutes and is reproducible using seed accounts/devices.
+
+Codebase demonstrates abstraction (sample BlockchainService interface + MockBlockchainService), DI, and clean modules.
+
+Repo contains Docker Compose and a one-command start (make dev or npm run dev:all) with environment variables explained.
+
+Detailed feature list & guidance (developer-targeted)
+Entities / Data models (JSON examples)
+
+User / Tourist
+
+{
+  "id": "uuid",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "phone": "+91...",
+  "role": "TOURIST | GUARDIAN | ADMIN",
+  "createdAt": "...",
+  "profile": { "passportHash": "sha256(...)", "country": "IN" }
+}
+
+
+DigitalID
+
+{
+  "id": "uuid",
+  "touristId": "uuid",
+  "itinerary": [{ "place": "Place A", "from": "2025-09-01", "to": "2025-09-05"}],
+  "validFrom": "...",
+  "validTo": "...",
+  "anchorHash": "sha256(payload+timestamp)",
+  "qrCode": "<dataURI>"
+}
+
+
+Alert
+
+{
+  "id": "uuid",
+  "touristId": "uuid",
+  "lat": 26.0,
+  "lng": 94.0,
+  "type": "PANIC | GEOFENCE | SILENT",
+  "status": "PENDING | ACKED | RESOLVED",
+  "createdAt": "...",
+  "relayedVia": ["deviceId1", "deviceId2"] // for mesh simulation
+}
+
+
+Geozone
+
+{
+  "id": "uuid",
+  "name": "Cave Zone 1",
+  "polygon": [[lat,lng],...],
+  "riskScore": 80
+}
+
+
+Guardian
+
+{
+  "id":"uuid",
+  "name":"Hotel X",
+  "contact":"+91...",
+  "location":{"lat":..,"lng":..}
+}
+
+Backend API (essential endpoints)
+
+POST /api/auth/register → create user (mock KYC)
+
+POST /api/auth/login → returns JWT
+
+POST /api/digital-ids → create time-bound digital ID (returns QR and anchorHash)
+
+GET /api/digital-ids/:id → fetch (admin/authorized only)
+
+POST /api/alerts → create alert (idempotent, requires tourist token)
+
+GET /api/alerts → admin/dashboards stream
+
+POST /api/guardians → register guardian
+
+POST /api/relay → mesh relay endpoint for simulation (accepts an alert payload and forwards to backend)
+
+GET /api/geozones → get list of polygons & risk scores
+
+POST /api/verify-anchor → accepts ID payload and returns verification of hash
+
+Real-time: WebSocket namespace alerts to push alerts to the dashboard UI.
+
+Abstractions & interfaces to implement
+
+IBlockchainService with methods: anchor(payload): Promise<string> and verify(payload, anchorHash): Promise<boolean>.
+
+Provide MockBlockchainService that returns SHA-256 hash and stores anchor in DB.
+
+IAlertRelay with methods: relay(alert): Promise<void> and registerPeer(peerId).
+
+Provide WebsocketRelay (normal) and SimulatedMeshRelay (for demo) implementations.
+
+Base BaseService<T> for common CRUD patterns (repositories use TypeORM/Prisma).
+
+BaseController with standardized success/error response shapes.
+
+Geo features & utilities
+
+Use turf.js or @turf/boolean-point-in-polygon for point-in-polygon logic (geofence).
+
+Use Haversine formula for distance calculations (utility function).
+
+Safety Index calculation: safety = clamp(100 - riskScoreFromGeozone - crowdFactor - timeFactor, 0, 100); implement as a SafetyService so it can be swapped with ML later.
+
+Mesh relay simulation strategy (software-only)
+
+Implement a simulateMesh mode:
+
+Mode A (Demo quick): App sends a POST to POST /api/relay with simulateOffline=true. A second test device running the app polls /api/relay/pending and, when seeing an alert, sends it to backend via normal /api/alerts endpoint. This simulates device-to-device relay without needing Bluetooth.
+
+Mode B (Optional): Use WebRTC DataChannel with a simple signaling server for true P2P relaying if time permits.
+
+Provide toggles in app UI: simulate_offline and relay_device for easy demo.
+
+Mobile app UX & screens
+
+Clean, modern look with clear call-to-action (panic button large & red). Suggested palette: deep teal (#0b6e6b), coral accent (#ff6b6b), neutral backgrounds.
+
+Screens:
+
+Onboarding / Mock KYC form
+
+Digital ID page (QR + expiry + anchorHash shown)
+
+Map (Mapbox) with current location, geozones highlighted, Safety Index widget, Guardian toggle
+
+Panic button screen (big button + silent SOS instructions)
+
+Alert history + status
+
+Settings: language (i18n), simulate mesh toggle, guardian selection
+
+Accessibility: ensure large tappable panic button; color contrast; multilingual support using react-i18next with 3 languages initial (English, Hindi, Assamese or Bengali for Northeast demo).
+
+Dashboard UI
+
+Sidebar (filters: districts / geozone / time)
+
+Map canvas with clustered markers and heatmap overlay (Mapbox GL or Leaflet + heatmap plugin)
+
+Alert stream on right panel → click to open alert detail with ID QR, last-known path, option to draft e-FIR (button shows mocked generated document modal)
+
+Admin actions: acknowledge alert, assign responder, resolve.
+
+Implementation notes & choreography
+
+Coding pattern sample (TypeScript):
+
+abstract class BlockchainService implements IBlockchainService { abstract anchor(payload): Promise<string>; }
+
+class MockBlockchainService extends BlockchainService { async anchor(payload) { return sha256(JSON.stringify(payload)+timestamp); } }
+
+Repository pattern: each entity has EntityRepository with methods findById, save, delete, search etc.
+
+DTOs & Validation: use class-validator (NestJS) or Zod for DTO schema validation.
+
+Env & secrets: use .env variables; no secrets committed.
+
+Testing & reliability
+
+Unit tests for:
+
+SafetyService (various geozone combinations)
+
+AlertService (idempotency & status transitions)
+
+MockBlockchainService (hash matches)
+
+Integration test: create user → create digital ID → simulate panic → dashboard receives alert. Use Jest & Supertest.
+
+Provide one or two basic test cases and npm test script.
+
+Devops & run instructions (must be included in README)
+
+docker-compose.yml with services: backend, postgres, frontend, dashboard (or single combined frontend).
+
+Makefile or npm scripts:
+
+npm run dev:backend
+
+npm run dev:mobile (Expo)
+
+npm run dev:dashboard
+
+npm run dev:all (runs concurrently)
+
+Example .env.example with keys (JWT_SECRET, DB_URL, FCM_SERVER_KEY, MAPBOX_TOKEN, SIMULATE_MESH=true)
+
+Seed script: npm run seed to create sample geozones, two tourist accounts, one guardian account, and sample alerts.
+
+UX polish & modern look guidance
+
+Use consistent modern fonts (Inter for web + Nunito for app).
+
+Card-based layout, subtle shadows, rounded corners (2xl), and a calm color palette (teal + coral accents).
+
+Large panic CTA at bottom center of mobile map screen; microcopy: “Hold to cancel. Release to confirm panic.”
+
+Use small animated micro-interactions (button ripple, success tick).
+
+Provide a small demo mode banner explaining simulated mesh when enabled.
+
+Demo script (2–4 minutes)
+
+Start: show dashboard seeded with no active alerts.
+
+Device A (tourist): open app → register → generate Digital ID → show QR + anchorHash. (30s)
+
+Move into geozone (simulate moving location or click “simulate enter geozone”) → Safety Index drops → geofence alert shown locally. (20s)
+
+Press panic button → dashboard receives alert, guardian gets push/WS notification; show alert detail with ID and “Draft e-FIR” button. (40s)
+
+Offline simulation: toggle “simulate offline”, press panic; show Device B relaying alert via /api/relay endpoint → dashboard receives alert. (40s)
+
+End with privacy: show digital ID expiry and delete data flow (auto-delete after demo case closed). (20s)
+
+Include a README section that lists commands to reproduce each step.
+
+Deliverables (what AI/dev should produce)
+
+Git repo with backend/, frontend/, mobile/ folders and top-level docker-compose.yml.
+
+README with quick start, demo script, and design notes.
+
+Seed data & Postman collection or OpenAPI spec.
+
+Basic unit tests and npm test.
+
+One short animated GIF or screen-recording script instructions of the demo (optional).
+
+A small architecture diagram (PNG or README ASCII schematic).
+
+Constraints & final notes (must obey)
+
+Keep everything software-only. No hardware or IoT devices required.
+
+Simulate complex systems (blockchain, mesh) through easy-to-swap abstractions and toggles — do not hardcode logic in controllers.
+
+Prioritize developer ergonomics: TypeScript strict mode, meaningful error messages, and modular code. Keep onboarding of new devs easy.
+
+Keep the feature set limited to what can be built and reliably demonstrated in 48–72 hours; leave hooks and interfaces for Phase 2 work.
+
+Example prompt payload (copy-pasteable for an AI code generator)
+
+Build a TourPal prototype with the following stack: Expo React Native (TypeScript) for mobile, React + Vite (TypeScript + Tailwind) for dashboard, and NestJS (TypeScript) backend with Postgres (or Firestore). Implement the core features listed above (digital ID with hash anchoring, panic/geo-fence alerts, simulated mesh relay, Guardian Mode, safety index, and real-time dashboard via WebSockets). Follow clean architecture: controllers → services → repositories → entities. Use DI and define abstract interfaces for BlockchainService and AlertRelay with mock implementations. Provide Docker Compose, seed data, a demo script that reproduces the flows, and tests. Keep code modular, typed, and easy to extend. Provide README and run instructions. Prioritize reliability, reusability, and safe defaults.
+Important: Do not connect to any real blockchain or hardware. Use simulate_mesh and MockBlockchainService flags and provide toggles in the UI. Export a Postman collection / OpenAPI spec and at least one unit test for SafetyService.
