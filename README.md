@@ -1,6 +1,6 @@
-# Safety Intelligence Hub - UI Prototype
+# TourSafe
 
-A React-based safety monitoring and emergency response platform with AI-powered features.
+A React-based safety monitoring and emergency response platform with AI-powered features for Tourists.
 
 ## Features
 
