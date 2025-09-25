@@ -27,11 +27,20 @@ export const SafetyProvider = ({ children }) => {
           });
         },
         (error) => {
-          console.error('Error getting location:', error);
-          // Fallback to a default location if permission denied
-          setUserLocation({ lat: 28.6139, lng: 77.2090 }); // Default to New Delhi
+          console.warn('Geolocation access denied or failed:', error.message);
+          // Fallback to a default location (Guwahati for demo)
+          setUserLocation({ lat: 26.1445, lng: 91.7362 });
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 5000,
+          maximumAge: 300000 // 5 minutes
         }
       );
+    } else {
+      console.warn('Geolocation is not supported by this browser');
+      // Fallback to default location
+      setUserLocation({ lat: 26.1445, lng: 91.7362 });
     }
   };
 
@@ -55,7 +64,7 @@ export const SafetyProvider = ({ children }) => {
     };
     
     // In a real app, this would send the alert to your backend
-    console.log('SOS Alert:', newAlert);
+    console.log('🚑 SOS Alert Generated:', newAlert);
     
     // Add to local state
     setSafetyAlerts(prev => [newAlert, ...prev]);
@@ -63,12 +72,30 @@ export const SafetyProvider = ({ children }) => {
     // Notify trusted contacts
     notifyTrustedContacts(newAlert);
     
+    // Create browser notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('🚑 SOS Alert Sent', {
+        body: 'Emergency services have been notified. Help is on the way.',
+        icon: '/favicon.ico',
+        tag: 'sos-alert',
+        requireInteraction: true
+      });
+    }
+    
     return newAlert;
   };
 
   // Notify trusted contacts (mock implementation)
   const notifyTrustedContacts = (alert) => {
-    console.log('Notifying trusted contacts:', trustedContacts);
+    console.log('📞 Notifying trusted contacts:', trustedContacts);
+    
+    // Simulate contact notifications with visual feedback
+    trustedContacts.forEach((contact, index) => {
+      setTimeout(() => {
+        console.log(`✅ ${contact.name} (${contact.phone}) notified successfully`);
+      }, (index + 1) * 500);
+    });
+    
     // In a real app, this would send SMS/email/notification to contacts
   };
 

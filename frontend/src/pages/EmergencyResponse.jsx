@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useSafety } from "../contexts/SafetyContext";
 import SafetyStatus from "../components/safety/SafetyStatus";
 import SafetyTips from "../components/safety/SafetyTips";
 import LocationSharing from "../components/safety/LocationSharing";
@@ -9,10 +10,102 @@ import GuardianMode from "../components/safety/GuardianMode";
 import MeshRelayControl from "../components/safety/MeshRelayControl";
 export default function EmergencyResponse() {
   const navigate = useNavigate();
+  const { sendSOS, userLocation } = useSafety();
+  
   // State for emergency number and location form
   const [emergencyNumber, setEmergencyNumber] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
+  
+  // SOS Button states
+  const [isActivatingSOS, setIsActivatingSOS] = useState(false);
+  const [sosCountdown, setSosCountdown] = useState(null);
+  const [lastSOSActivation, setLastSOSActivation] = useState(null);
+  
+  // Handle SOS button press with countdown
+  const handleSOSPress = () => {
+    if (isActivatingSOS || sosCountdown !== null) return;
+    
+    setSosCountdown(3);
+    
+    const countdownTimer = setInterval(() => {
+      setSosCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownTimer);
+          triggerSOS();
+          setSosCountdown(null);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+  
+  // Cancel SOS countdown
+  const cancelSOS = () => {
+    setSosCountdown(null);
+  };
+  
+  // Trigger SOS alert
+  const triggerSOS = async () => {
+    try {
+      setIsActivatingSOS(true);
+      
+      // Send SOS through safety context
+      const alert = sendSOS();
+      
+      // Vibrate if available
+      if ('vibrator' in navigator || 'vibrate' in navigator) {
+        navigator.vibrate?.([200, 100, 200, 100, 200]);
+      }
+      
+      // Audio alert
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        gainNode.gain.value = 0.1;
+        
+        oscillator.start();
+        setTimeout(() => oscillator.stop(), 200);
+      } catch (error) {
+        console.log('Audio alert not available');
+      }
+      
+      setLastSOSActivation(new Date());
+      
+      setTimeout(() => {
+        setIsActivatingSOS(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('SOS activation failed:', error);
+      setIsActivatingSOS(false);
+    }
+  };
+  
+  // Get SOS button text
+  const getSOSButtonText = () => {
+    if (isActivatingSOS) return '✓ SENT';
+    if (sosCountdown !== null) return sosCountdown;
+    return 'SOS';
+  };
+  
+  // Get SOS button class
+  const getSOSButtonClass = () => {
+    if (isActivatingSOS) {
+      return 'bg-green-500 text-white';
+    }
+    if (sosCountdown !== null) {
+      return 'bg-yellow-500 text-white animate-pulse';
+    }
+    return 'bg-red-600 hover:bg-red-700 text-white';
+  };
 
   // Dummy image URL for safe zones
   const mapImg = "https://maps.wikimedia.org/img/osm-intl,16,48.8566,2.3522,600x400.png";
@@ -113,6 +206,65 @@ export default function EmergencyResponse() {
                   </a>
                 </div>
               ))}
+            </div>
+            
+            {/* Emergency SOS Section */}
+            <div className="mt-6 p-6 bg-red-50 border-2 border-red-200 rounded-lg">
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-red-800 mb-2">Emergency SOS Alert</h3>
+                <p className="text-sm text-red-600 mb-4">
+                  Press and hold the SOS button for immediate emergency assistance
+                </p>
+                
+                {/* SOS Button */}
+                <div className="flex flex-col items-center space-y-3">
+                  <button
+                    className={`w-20 h-20 rounded-full flex items-center justify-center font-bold text-xl shadow-lg transition-all transform hover:scale-105 ${
+                      getSOSButtonClass()
+                    }`}
+                    onClick={handleSOSPress}
+                    disabled={isActivatingSOS}
+                    aria-label="Emergency SOS Button"
+                  >
+                    {getSOSButtonText()}
+                  </button>
+                  
+                  {/* Countdown cancel button */}
+                  {sosCountdown !== null && (
+                    <button
+                      onClick={cancelSOS}
+                      className="text-xs px-3 py-1 bg-gray-600 text-white rounded-full hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  
+                  {/* Status indicators */}
+                  <div className="text-center space-y-1">
+                    {sosCountdown !== null && (
+                      <div className="text-xs text-yellow-600 font-medium animate-pulse">
+                        Sending in {sosCountdown}... Click Cancel to stop
+                      </div>
+                    )}
+                    {lastSOSActivation && (
+                      <div className="text-xs text-green-600">
+                        ✓ Last SOS: {new Date(lastSOSActivation).toLocaleTimeString()}
+                      </div>
+                    )}
+                    {isActivatingSOS && (
+                      <div className="text-xs text-green-600 font-medium">
+                        🚑 Emergency alert sent! Help is on the way.
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Instructions */}
+                  <div className="text-xs text-gray-600 text-center max-w-xs">
+                    <p className="mb-1">⚠️ This will send your location to emergency services</p>
+                    <p>📞 Trusted contacts will be notified automatically</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

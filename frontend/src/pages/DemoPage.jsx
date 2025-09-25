@@ -5,12 +5,12 @@ import { useGeofence } from '../contexts/GeofenceContext';
 import { useGuardian } from '../contexts/GuardianContext';
 import { useMeshRelay } from '../contexts/MeshRelayContext';
 import { useSafetyIndex } from '../contexts/SafetyIndexContext';
+import { useSafety } from '../contexts/SafetyContext';
 import DigitalIDCard from '../components/safety/DigitalIDCard';
 import SafetyIndexWidget from '../components/safety/SafetyIndexWidget';
 import GeofenceAlerts from '../components/safety/GeofenceAlerts';
 import GuardianMode from '../components/safety/GuardianMode';
 import MeshRelayControl from '../components/safety/MeshRelayControl';
-import SOSButton from '../components/safety/SOSButton';
 import AIControlPanel from '../components/ai/AIControlPanel';
 import AIPredictiveAlerts from '../components/ai/AIPredictiveAlerts';
 import AIAnomalyDetection from '../components/ai/AIAnomalyDetection';
@@ -24,11 +24,150 @@ const DemoPage = () => {
   const { assignedGuardian, assignGuardian } = useGuardian();
   const { isOfflineMode, relayHistory } = useMeshRelay();
   const { safetyScore } = useSafetyIndex();
+  const { sendSOS } = useSafety();
 
   const [currentDemo, setCurrentDemo] = useState('overview');
   const [demoProgress, setDemoProgress] = useState(0);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [currentMessage, setCurrentMessage] = useState('I need help, where is the nearest hospital?');
+  
+  // Demo SOS states
+  const [demoSOSCountdown, setDemoSOSCountdown] = useState(null);
+  const [isDemoSOSActive, setIsDemoSOSActive] = useState(false);
+  const [lastDemoSOS, setLastDemoSOS] = useState(null);
+  
+  // Handle demo SOS activation
+  const handleDemoSOS = () => {
+    if (isDemoSOSActive || demoSOSCountdown !== null) return;
+    
+    setDemoSOSCountdown(3);
+    
+    const timer = setInterval(() => {
+      setDemoSOSCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          triggerDemoSOS();
+          setDemoSOSCountdown(null);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+  
+  const cancelDemoSOS = () => {
+    setDemoSOSCountdown(null);
+  };
+  
+  const triggerDemoSOS = () => {
+    setIsDemoSOSActive(true);
+    
+    // Use setTimeout to avoid calling sendSOS during render
+    setTimeout(() => {
+      try {
+        // Simulate SOS alert (demo mode only)
+        const demoAlert = sendSOS();
+        console.log('🎬 DEMO SOS Alert:', demoAlert);
+        console.log('📍 Demo Location: Guwahati Tourist Area');
+        console.log('🔔 Demo Notification: Emergency services notified (SIMULATION)');
+        console.log('👮 Demo Guardian: Hotel Taj assigned as guardian');
+        console.log('📱 Demo Contacts: Priya Sharma and Bhawesh Bhaskar notified (SIMULATION)');
+      } catch (error) {
+        console.error('Demo SOS failed:', error);
+      }
+    }, 0);
+    
+    // Audio feedback - simple and reliable approach
+    try {
+      // Create a simple beep using HTML5 Audio with a data URL
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Resume audio context if suspended
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      // Create a short beep sound
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Configure the beep
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+      
+      console.log('🔊 Beep sound played successfully');
+    } catch (error) {
+      console.log('Audio context failed, trying alternative:', error);
+      
+      // Fallback: try to play a system sound
+      try {
+        // Create an HTML audio element with a simple tone
+        const audio = document.createElement('audio');
+        audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8tmQQAoUXrTp66hVFApGn+DyvmMYBTyLj-ngnZ5NFAhVqOX1uWkdBD2S2dPXGZINJxhEJwI5JgQdZa/s5sBUEAlKotv5unQgBz-X2PPZHZ0NGk4KQCH2x2omBAhPpen2vWkdB';
+        audio.volume = 0.3;
+        audio.play().catch(e => console.log('HTML audio fallback also failed:', e));
+      } catch (e) {
+        console.log('All audio methods failed');
+      }
+    }
+    
+    // Vibration feedback if available
+    if ('vibrator' in navigator || 'vibrate' in navigator) {
+      navigator.vibrate?.([200, 100, 200, 100, 200]); // SOS pattern in morse code
+    }
+    
+    // Browser notification
+    if ('Notification' in window) {
+      if (Notification.permission === 'granted') {
+        new Notification('🎬 Demo SOS Alert', {
+          body: 'Demo emergency alert sent successfully!',
+          icon: '/favicon.ico',
+          tag: 'demo-sos-alert',
+          requireInteraction: false
+        });
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            new Notification('🎬 Demo SOS Alert', {
+              body: 'Demo emergency alert sent successfully!',
+              icon: '/favicon.ico'
+            });
+          }
+        });
+      }
+    }
+    
+    setLastDemoSOS(new Date());
+    
+    // Reset after 3 seconds
+    setTimeout(() => {
+      setIsDemoSOSActive(false);
+    }, 3000);
+  };
+  
+  const getDemoSOSButtonText = () => {
+    if (isDemoSOSActive) return '✓ DEMO';
+    if (demoSOSCountdown !== null) return demoSOSCountdown;
+    return '🎬 TEST SOS';
+  };
+  
+  const getDemoSOSButtonClass = () => {
+    if (isDemoSOSActive) {
+      return 'bg-green-500 text-white';
+    }
+    if (demoSOSCountdown !== null) {
+      return 'bg-yellow-500 text-white animate-pulse';
+    }
+    return 'bg-orange-600 hover:bg-orange-700 text-white';
+  };
 
   useEffect(() => {
     if (!isDemoMode) {
@@ -359,9 +498,69 @@ const DemoPage = () => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <h4 className="font-semibold text-red-800 mb-2">Demo SOS Test</h4>
               <p className="text-sm text-red-600 mb-3">
-                Test the emergency alert system safely in demo mode
+                Experience the emergency alert system with realistic audio and vibration feedback.
               </p>
-              <SOSButton />
+              
+              {/* Demo SOS Button */}
+              <div className="flex flex-col items-center space-y-3">
+                <button
+                  className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm shadow-lg transition-all transform hover:scale-105 ${
+                    getDemoSOSButtonClass()
+                  }`}
+                  onClick={handleDemoSOS}
+                  disabled={isDemoSOSActive}
+                  aria-label="Demo SOS Button"
+                  title="Demo emergency alert - click to test with sound"
+                  onMouseDown={() => {
+                    // Pre-enable audio context on user interaction
+                    try {
+                      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                      if (audioContext.state === 'suspended') {
+                        audioContext.resume();
+                      }
+                    } catch (e) {
+                      // Ignore if audio context fails
+                    }
+                  }}
+                >
+                  {getDemoSOSButtonText()}
+                </button>
+                
+                {/* Demo controls */}
+                {demoSOSCountdown !== null && (
+                  <button
+                    onClick={cancelDemoSOS}
+                    className="text-xs px-3 py-1 bg-gray-600 text-white rounded-full hover:bg-gray-700"
+                  >
+                    Cancel Demo
+                  </button>
+                )}
+                
+                {/* Demo status */}
+                <div className="text-center space-y-1">
+                  {demoSOSCountdown !== null && (
+                    <div className="text-xs text-yellow-600 font-medium animate-pulse">
+                      Demo SOS in {demoSOSCountdown}... Click Cancel to stop
+                    </div>
+                  )}
+                  {lastDemoSOS && (
+                    <div className="text-xs text-green-600">
+                      ✓ Last Demo: {new Date(lastDemoSOS).toLocaleTimeString()}
+                    </div>
+                  )}
+                  {isDemoSOSActive && (
+                    <div className="text-xs text-green-600 font-medium">
+                      🎬 Emergency alert sent! Help is on the way.
+                    </div>
+                  )}
+                </div>
+                
+                {/* Demo disclaimer */}
+                <div className="text-xs text-gray-600 text-center max-w-xs">
+                  <p className="mb-1">⚠️ <strong>Demo Mode Active</strong></p>
+                  <p>Emergency alert simulation with audio/vibration feedback</p>
+                </div>
+              </div>
             </div>
           </div>
           

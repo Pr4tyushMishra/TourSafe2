@@ -253,9 +253,9 @@ const SOSButton = ({ className = '' }) => {
   };
 
   return (
-    <div className="fixed bottom-8 right-8 z-50">
+    <div className="fixed bottom-8 left-8 z-50">
       {/* Silent Mode Toggle */}
-      <div className="mb-2 text-right">
+      <div className="mb-2 text-left">
         <button
           onClick={() => setSilentMode(!silentMode)}
           className={`text-xs px-3 py-1 rounded-full transition-all ${
@@ -283,7 +283,7 @@ const SOSButton = ({ className = '' }) => {
       </button>
       
       {/* Status indicators */}
-      <div className="mt-2 text-right space-y-1">
+      <div className="mt-2 text-left space-y-1">
         {countdown !== null && (
           <div className="text-xs text-yellow-600 font-medium animate-pulse">
             Click elsewhere to cancel
